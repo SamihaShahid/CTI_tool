@@ -1,12 +1,12 @@
 from flask import Flask, render_template, jsonify
 import pandas as pd
-import os
 import requests
+from io import StringIO, BytesIO
 
 app = Flask(__name__)
 
-# GitHub Raw URLs for dataset (Replace 'your-repo' and 'your-branch' with actual values)
-GITHUB_BASE_URL = "https://github.com/SamihaShahid/CTI_tool/tree/main/data/"
+# Corrected GitHub Raw URL
+GITHUB_BASE_URL = "https://raw.githubusercontent.com/SamihaShahid/CTI_tool/main/data/"
 
 file_paths = {
     "Stationary Point": "eic_sp_processed.csv",
@@ -17,20 +17,30 @@ file_paths = {
     "Areawide": "eic_a.csv",
 }
 
-# Load datasets dynamically from GitHub
+# Load CSV files from GitHub
 def load_data_from_github(filename):
     url = GITHUB_BASE_URL + filename
     response = requests.get(url)
     if response.status_code == 200:
-        return pd.read_csv(url)
+        return pd.read_csv(StringIO(response.text))  # Fix: Read from response
+    else:
+        print(f"Failed to load {filename} from GitHub")
+        return pd.DataFrame()
+
+# Load Excel file from GitHub
+def load_excel_from_github(filename):
+    url = GITHUB_BASE_URL + filename
+    response = requests.get(url)
+    if response.status_code == 200:
+        return pd.read_excel(BytesIO(response.content), sheet_name="Sheet1")  # Fix: Read from response
     else:
         print(f"Failed to load {filename} from GitHub")
         return pd.DataFrame()
 
 # Load main dataset
-df = pd.read_excel(GITHUB_BASE_URL + 'processed_ems_2020_rpt_grp.xlsx', sheet_name="Sheet1")
+df = load_excel_from_github("processed_ems_2020_rpt_grp.xlsx")
 
-# Read all data files into a dictionary of DataFrames
+# Read all CSV data files into a dictionary of DataFrames
 source_data = {key: load_data_from_github(path) for key, path in file_paths.items()}
 
 @app.route("/")
