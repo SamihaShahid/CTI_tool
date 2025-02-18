@@ -1,0 +1,6 @@
+Flask
+pandas
+requests
+openpyxl  # Required for reading Excel files
+gunicorn  # Required for deployment
+
