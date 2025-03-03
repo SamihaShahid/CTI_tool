@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CTI Query Tool</title>
+    <title>California Toxics Emission Inventory (CTI) Query Tool</title>
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -65,7 +65,7 @@
 <body>
 
     <div class="container">
-        <h2 class="text-center mb-4">CTI Query Tool</h2>
+        <h2 class="text-center mb-4">California Toxics Emission Inventory (CTI) Query Tool</h2>
 
         <div class="card">
             <h4>Select Pollutant</h4>
@@ -80,10 +80,37 @@
         </div>
 
         <div class="card">
-            <h4>Select Source</h4>
+            <h4>Source</h4>
             <select id="source-dropdown" class="form-select">
                 {% for src in sources %}
                 <option value="{{ src }}">{{ src }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="card">
+            <h4>County</h4>
+            <select id="county-dropdown" class="form-select">
+                {% for co in county %}
+                <option value="{{ co }}">{{ co }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="card">
+            <h4>Air Basin</h4>
+            <select id="ab-dropdown" class="form-select">
+                {% for ab in ab %}
+                <option value="{{ ab }}">{{ ab }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="card">
+            <h4>District</h4>
+            <select id="dis-dropdown" class="form-select">
+                {% for dis in dis %}
+                <option value="{{ dis }}">{{ dis }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -93,7 +120,7 @@
             <table id="data-table" class="table table-striped table-hover">
                 <thead class="table-dark">
                     <tr>
-                        <th>EICSUMN</th><th>SUM(EMS)</th>
+                        <th>EICSUM</th><th>EICSUMN</th><th>EMS</th><th>CANCER_TWE</th><th>CHRONIC_TWE</th><th>ACUTE_TWE</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -101,11 +128,11 @@
         </div>
 
         <div class="card">
-            <h4>Details for Selected EICSUMN</h4>
+            <h4>Details for Selected EIC Name</h4>
             <table id="details-table" class="table table-striped table-hover">
                 <thead class="table-dark">
                     <tr>
-                        <th>EIC</th><th>SUM(EMS)</th>
+                        <th>EICSUMN</th><th>EIC</th><th>EMS</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -116,38 +143,44 @@
 
     <script>
         $(document).ready(function() {
-            function fetchData() {
-                var pollutant = $("#pollutant-dropdown").val();
-                var source = $("#source-dropdown").val();
-                
-                $.getJSON(`/data/${pollutant}/${source}`, function(data) {
-                    var table = $('#data-table').DataTable();
-                    table.clear();
-                    data.forEach(row => {
-                        table.row.add([row.eicsumn, row["SUM(EMS)"]]);
-                    });
-                    table.draw();
-                });
-            }
-
-            function fetchPlot(pollutant) {
-                $.getJSON(`/plot/${pollutant}`, function(data) {
-                    if (data.plot_url) {
-                        $("#pollutant-plot").attr("src", data.plot_url);
-                    } else {
-                        $("#pollutant-plot").attr("src", "");  // Hide if no data
-                    }
-                });
-            }
-
-            $("#pollutant-dropdown, #source-dropdown").change(fetchData);
-
             var mainTable = $("#data-table").DataTable();
             var detailsTable = $("#details-table").DataTable();
 
-            // Function to filter dropdown and auto-select pollutant
-            $("#pollutant-search").on("keyup", function() {
-                var searchText = $(this).val().toLowerCase();
+            function fetchData() {
+                var pollutant = $("#pollutant-dropdown").val();
+                var source = $("#source-dropdown").val();
+                var county = $("#county-dropdown").val();
+                var ab = $("#ab-dropdown").val();
+                var dis = $("#dis-dropdown").val();
+             
+                $.getJSON(`/data/${pollutant}/${source}`, function(data) {
+                    mainTable.clear();
+                    data.forEach(row => {
+                        mainTable.row.add([row.EICSUM, row.EICSUMN, row["EMS"], row["CANCER_TWE"], row["CHRONIC_TWE"], row["ACUTE_TWE"]]);
+                    });
+                    mainTable.draw();
+                }).fail(function() {
+                    console.error("Error fetching data");
+                });
+            }
+
+            function fetchDetails(eicsumn) {
+                var pollutant = $("#pollutant-dropdown").val();
+                var source = $("#source-dropdown").val();
+
+                $.getJSON(`/details/${pollutant}/${source}/${eicsumn}`, function(data) {
+                    detailsTable.clear();
+                    data.forEach(row => {
+                        detailsTable.row.add([row.EICSUMN, row.EIC, row["EMS"]]);
+                    });
+                    detailsTable.draw();
+                }).fail(function() {
+                    console.error("Error fetching details for EICSUMN:", eicsumn);
+                });
+            }
+
+            function filterPollutantDropdown() {
+                var searchText = $("#pollutant-search").val().toLowerCase();
                 var found = false;
 
                 $("#pollutant-dropdown option").each(function() {
@@ -156,45 +189,30 @@
                         $(this).show();
                         if (!found) {
                             found = true;
-                            $("#pollutant-dropdown").val($(this).val()); // Auto-select first match
+                            $("#pollutant-dropdown").val($(this).val());
                         }
                     } else {
                         $(this).hide();
                     }
                 });
 
-                if (found) {
-                    fetchData(); // Automatically update table and plot when selection changes
-                }
-            });
+                if (found) fetchData();
+            }
 
-            // Event listener for row click in main table
+            $("#pollutant-dropdown, #source-dropdown").change(fetchData);
+            $("#pollutant-search").on("keyup", filterPollutantDropdown);
+
             $("#data-table tbody").on("click", "tr", function () {
                 $("#data-table tbody tr").removeClass("selected-row");
                 $(this).addClass("selected-row");
 
                 var rowData = mainTable.row(this).data();
                 if (rowData) {
-                    var selectedEicsumn = rowData[0];  // Extract eicsumn
+                    var selectedEicsumn = rowData[1];  // Ensure it's the correct column index
                     fetchDetails(selectedEicsumn);
                 }
             });
 
-            // Function to fetch detailed data for selected eicsumn
-            function fetchDetails(eicsumn) {
-                var pollutant = $("#pollutant-dropdown").val();
-                var source = $("#source-dropdown").val();
-
-                $.getJSON(`/details/${pollutant}/${source}/${eicsumn}`, function(data) {
-                    detailsTable.clear();
-                    data.forEach(row => {
-                        detailsTable.row.add([row.eic, row["SUM(EMS)"]]);
-                    });
-                    detailsTable.draw();
-                });
-            }
-
-            $("#data-table").DataTable();
             fetchData();
         });
     </script>
